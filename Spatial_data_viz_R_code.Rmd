@@ -1,0 +1,590 @@
+---
+title: "Statistical and Spatial Data Analysis and Visualization Project - Using CDRC Data"
+subtitle: "Documentation of my learning process and experience towards completion of the project"
+author: "Tosin Harold Akingbemisilu"
+date: 13/08/2021
+output: statsr:::statswithr_lab
+---
+
+* * *
+
+## Getting Started
+<div class="instructions">
+This work is part of my personal project-based learning, that involves the handling, analysis and spatial visualization of data from Consumer Data Research Centre (CDRC) portal, an open data portal freely available on `https://data.cdrc.ac.uk/` and a guide on using R for analysis on `https://data.cdrc.ac.uk/dataset/introduction-spatial-data-analysis-and-visualisation-r`. The main aim of this work apart from it being a full project, is to also document the processes, and necessary learning, most especially on why I took certain steps and what those steps are mainly used for. I believe this would always help me as reference for further projects.
+
+The CDRC portal stores consumer-related data from a large number of sources (retailers and other service organisations) within the UK, as part of their routine business processes. They are commonly used within the private sector to monitor the needs, preferences and behaviours of customers. However, the data is also of high value to public institutions. Census data is also useful to consumer insight, all leading retailers rely on accurate spatial data on population in order to guide the planning of their store locations and how their stock is distributed and marketed across the country.
+
+**Using R, this project is aimed at:**
+
+1. Data Exploration
+    + Exploring the data efficiently and creating descriptive statistics
+    + visualizing the distribution(s) of our data through the creation of univariate plots
+2. Bivariate Plot Analysis
+    + Creating a simple scatter plot
+    + Creating a symbols plot
+    + Creating plots in the ggplot package
+3. Finding Relationships
+    + Pearson’s correlation test
+    + Run a Spearman’s correlation test
+    + Run a linear regression model
+4. Making Maps
+    + Load spatial data files into R
+    + Join data to GIS spatial data files
+    + Create a simple choropleth map
+    + Customise choropleth maps with the tmap package
+...
+</div>
+
+### Loading our data
+I will start by loading and renaming the different `csv` data files I would be working with, which is available in the data folder of my working directory path.
+
+```{r load-csv}
+Ethnicity <- read.csv("data/Camden/tables/KS201EW_oa11.csv")
+Rooms <- read.csv("data/Camden/tables/KS403EW_oa11.csv")
+Qualifications <-read.csv("data/Camden/tables/KS501EW_oa11.csv")
+Employment <-read.csv("data/Camden/tables/KS601EW_oa11.csv")
+```
+
+### Creating new data objects
+This step would help to create new data objects which only include the columns required in this project. The new data objects will be given the same name as the original data, therefore overriding the bigger file in R. I will be using the `variable_description.csv` file to lookup the codes, after isolating only the columns we are interested in. We are downloading percentages, not raw counts. `Geography code` is peculiar to all the files, which we will be using, including the other relevant column. Making a mistake here would require reloading the raw data into R.
+
+```{r load-relevant-column}
+Ethnicity <- Ethnicity[, c(1, 21)]
+Rooms <- Rooms[, c(1, 13)]
+Employment <- Employment[, c(1, 20)]
+Qualifications <- Qualifications[, c(1, 20)]
+```
+
+### Renaming our column headers
+**My note:** I would like to rename the two column, otherwise I would have specified in the code to rename only the column I need, using `names(Employment)[2] <- "Unemployed"` as an example, to edit the second column of our new employment data. The code below however renames the two columns in each data frame.
+
+```{r rename-column-headers}
+names(Ethnicity)<- c("OA", "White_British")
+names(Rooms)<- c("OA", "Low_Occupancy")
+names(Employment)<- c("OA", "Unemployed")
+names(Qualifications)<- c("OA", "Qualification")
+```
+
+### Merging the final data
+Now that we have our relevant data selected, and renamed, this step would help merge each of our data into a single dataset using the `merge()` function. I will be using the `OA` column which is unique to all dataset. The whole process would be done thrice since we have 4 data tables, by merging one dataset first with the next, and then using each of the merged dataset to merge the next table afterwards. The final merged table would be named as `Census.Data`.
+
+```{r merge-each-dataset}
+#1 Merge Ethnicity and Rooms to create a new object called "merged_data_1"
+merged_data_1 <- merge(Ethnicity, Rooms, by="OA")
+
+#2 Merge the "merged_data_1" object with Employment to create a new merged data object
+merged_data_2 <- merge(merged_data_1, Employment, by="OA")
+
+#3 Merge the "merged_data_2" object with Qualifications to create a new data object
+Census.Data <- merge(merged_data_2, Qualifications, by="OA")
+```
+
+### Removing the data object that is no longer needed
+Now that the data is merged and our Census.Data now contain 5 variables, the `merged_data_1` and `merged_data_2` table objects created during our merging process will be removed using the `rm()` function.
+
+```{r remove-unneeded-objects}
+#4 Remove the "merged_data" objects as we won't need them anymore
+rm(merged_data_1, merged_data_2)
+```
+
+So, we now have 749 observations and 5 variables in our new merged data table.
+
+```{r summary-data}
+dim(Census.Data)
+```
+### Exporting the final data into our working directory
+This next step is to save the new object `Census.Data` into our workspace folder and would be renaming it as `project_data`.
+
+```{r exporting-merged-data}
+# Writes the data to a csv named "practical_data" in your file directory
+write.csv(Census.Data, "project_data.csv", row.names=F)
+```
+
+## Data Exploration
+The techniques of data exploration are useful for deriving an understanding of large numerical variables in R. To have a view of what our data looks like in this environment, I would call some of the rows in our data, and all the column. The print function would be used in this case, and row 1 to 10, and all the columns (1 to 5) would be selected.
+
+__Just to note:__ I could do this by using `print(our_data [1:10,1:5])` or `print(our_data, [1:10, ]`. The latter leaves a space after the comma in the square bracket, since the whole column would be printed. Also, we could use the view(data) function to create a new window to view our data.
+
+```{r view-data}
+# prints the selected data within the console
+print(Census.Data[1:10, ])
+```
+
+Furthermore, I can always use the head() and tail() function to view the top 6 or bottom 6 cases of our data
+
+```{r head-data}
+head(Census.Data)
+```
+
+Also, to look at the number of columns in our data or the number of rows. We can use ncol() or nrow() function. We could also list the name of the column heading by using the name() function. All these are just steps towards getting the information of the data I am analyzing. Better still, we can use the dim() function, just as I used after merging our data above. This would give us the number of rows and columns.
+
+## Descriptive Statistics
+As mentioned in [Statistical Analysis Handbook](http://www.statsref.com/HTML/?descriptive_statistics.html), careful inspection of sample data values is often an essential and important part of any data analysis exercise. Initial inspection might include an examination of the mix of data, the occurrence of duplicate values, and checking for missing or mis-coded data, zero values and unexpected values (e.g. negatives when none are expected). 
+
+Subsequently a range of descriptive statistics may be produced, which seek to summarize the data in some way, and is often complemented by simple graphical representations such as line graphs, histograms or scatter diagrams. In the following sections many of the common descriptive statistics are described, including detailed descriptions of [measures of central tendency](http://www.statsref.com/HTML/?averages.html) and [measures of spread](http://www.statsref.com/HTML/?measures_of_spread.html). This is a very helpful book that I can always rely on, as a reference.
+
+Moving forward, it is worth nothing that `$` symbol is used, to select a single variable from the Census.Data object. If I type in `Census.Data$` (so the name of the data object followed by a `$` sign), then tab is pressed on the keyboard, and RStudio will let us select a variable from a drop down window. This step can be repeated for all qualifications variable.
+
+We will start with our mean, mode and median. Among the most basic of statistical measures are various forms of averages, or mean values. Since these statistics attempt to provide a single measure to summarize a large number of values, they focus on representing the whole dataset through central rather than extreme values, and are thus referred to as measures of central tendency (curled from the [Statistical Analysis Handbook](http://www.statsref.com/HTML/?descriptive_statistics.html))
+
+We will be using the `mean(), median() and range()` function for our mean, median and range. At this stage, the focus would be on a single column.
+
+```{r mean}
+mean (Census.Data$Unemployed)
+```
+```{r median}
+median (Census.Data$Unemployed)
+```
+```{r range}
+range (Census.Data$Unemployed)
+```
+
+Nonetheless, a very useful function for descriptive statistics is summary() which will produce multiple descriptive statistics as a single output, instead of doing above one after the other for each column. It can also be run for multiple variables or an entire data object.
+
+```{r data-summary}
+summary(Census.Data)
+```
+
+## Univariate Plot
+Univariate plot would help to convey the distribution of a particular variable in our dataset. It shows the data and summarizes its distribution. We could either use histogram or box plot or even a violin plot.
+
+### Histogram
+The purpose of a histogram (Chambers) is to graphically summarize the distribution of a univariate data set.
+
+It graphically shows the following:
+
+1. center (i.e., the location) of the data;
+2. spread (i.e., the scale) of the data;
+3. skewness of the data;
+4. presence of outliers; and
+5. presence of multiple modes in the data.
+
+I found a good resource for understanding and interpreting histogram in [Engineering statistics handbook](https://www.itl.nist.gov/div898/handbook/eda/section3/histogr6.htm)
+
+For this project, we will look at the unemployed data, using the `hist()` function. (Note: if a $ symbol followed by the column header is put after the data object, the function in R will read that column only). This step below can be repeated any variable qualification.
+
+```{r hist-unemployed}
+hist(Census.Data$Unemployed)
+```
+
+Our histogram above shows a right-skewed distribution. A "skewed right" distribution is one in which the tail is on the right side. As indicated in [Engineering statistics handbook](https://www.itl.nist.gov/div898/handbook/eda/section3/histogr6.htm), If the histogram indicates a right-skewed data set, the recommended next steps are to:
+
+1. Quantitatively summarize the data by computing and reporting the sample mean, the sample median, and the sample mode.
+2. Determine the best-fit distribution (skewed-right) from the
+    + Weibull family (for the maximum)
+    + Gamma family
+    + Chi-square family
+    + Lognormal family
+    + Power lognormal family
+3. Consider a normalizing transformation such as the Box-Cox transformation.
+
+Our histogram can be tidied up by including some parameters within the `hist()` function. In the example below, we specify the number of data breaks in the chart (breaks), colour the chart blue (col), create a title (main) and label the x-axis (xlab). For more information on all of the parameters of the function just type `?hist` into R and run it.
+
+```{r tidy-hist}
+# Creates a histogram, enters more commands about the visualisation
+hist(Census.Data$Unemployed, breaks=20, col= "blue", main="% unemployed", xlab="Percentage")
+```
+
+More breaks can be added in the `hist()` function above, but the higher the number of breaks, the more intricate and complex a histogram becomes. Below is to try to produce a histogram with 50 breaks to observe the difference.
+
+```{r tidy-hist2}
+# Creates a histogram, enters more commands about the visualisation
+hist(Census.Data$Unemployed, breaks=50, col= "blue", main="% unemployed", xlab="Percentage")
+```
+
+### Box Plots
+In addition to histograms, this is another type of plot that shows the core characteristics of the distribution of values within a dataset, and includes some of the summary() information we generated earlier, in a box and whisker plot (box plot for short). More information on the use of box plots and its function is found in the [Statistical Analysis Handbook, 2021](http://www.statsref.com/HTML/?measures_of_spread.html). Box plots (or box-whisker plots) are a form of exploratory data analysis (EDA) provided in many data analysis and graphing packages. Together with distribution plots and scatter plots they provide one of the three main ways in which statistical data are examined graphically.
+
+We will be running the `boxplot()` function. We can always use the `?boxplot` in R for more information within R.
+
+In the example below, we are creating multiple box plots in order to compare the four main variables. To select the variables we have used an array after Census.Data so that the function doesn’t read the row names too. We could also call individual rows i.e. boxplot`(Census.Data$Unemployed) or even pairs of variables i.e. boxplot(Census.Data$Unemployed, Census.Data$Qualification)`.
+
+```{r box-plot}
+# box and whisker plots for column 2 to 5
+boxplot(Census.Data[,2:5])
+```
+
+#### Few things to note about box plot (curled from [Statistical Analysis Handbook, 2021](http://www.statsref.com/HTML/?measures_of_spread.html))
+* The lower and upper lines of the "box" in the center of the plot window are the 25th and 75th percentiles of the sample (the lower quartile and the upper quartile). The distance between the top and bottom of the box is the inter-quartile range (IQR)
+* The line in the middle of the box is the sample median. If the median is not centered in the box it is an indication of skewness
+* The whiskers are lines extending above and below the box. They show the extent of the rest of the sample (unless there are outliers). Assuming no outliers, the maximum of the sample is the top of the upper whisker and the minimum of the sample is the bottom of the lower whisker. By default, an outlier is a value that is more than 1.5 times the IQR away from the top or bottom of the box (a hinge value of 1.5), so with outliers the whiskers and hinge line show a form of trimmed range, i.e. excluding the outliers (n.b. the term hinge is also used in statistics to refer to locations within the main data range, in some instances matching the upper and lower quartile values)
+* A symbol, e.g. a small circle, at the top and/or bottom of the plot is an indication of an outlier in the data. This point may be the result of a data entry error, a poor measurement or perhaps a highly significant observation.
+
+__Trying out box plot for just two variables__
+```{r box-plot2}
+boxplot(Census.Data$Unemployed, Census.Data$Qualification, names=c("Unemployed", "Qualifications"))
+```
+
+#### Going further to try out a violin plot
+This is another type of univariate plot known as a violin plot. The beauty of violin plot is that in its simplest form, it combines both box plots and histograms in one graphic. It is also possible to input multiple plots in a single image in order to draw comparisons. However, there is no function to create these plots in the standard R library so we need to install a new package.
+
+__We will start by installing the new package__
+To do this we use the `install.packages()` function followed by vioplot.
+
+```{r install violin-plot}
+# When you hit enter R will ask you to select a mirror to download the package contents from. It doesn't really matter which one you choose, I tend to pick the UK based ones.
+install.packages("vioplot")
+```
+
+Now that I have the package installed, installation is always done once. However, each time R is opened and wish to use a package, I need to use the `library()` or `require()` command, and then entering the name of the package in the brackets to tell R that it will be required to have it activated.
+
+```{r load-violinplot-package}
+# loads a package
+library(vioplot)
+```
+
+Now that we have our violin plot package fully loaded, let's try to use it. I can always run `?vioplot` to explore the parameters of the function and for any information on the package. In its very simplest form, one can just write `vioplot(Census.Data$Unemployed)` to create a simple plot for the Unemployed variable. However, the example below includes all four variables and a couple of extra parameters. The `ylim` command allows one to set the upper and lower limits of the y-axis (in this case 0 and 100 as all data is percentages). Three unique colours were also assigned to different parts of the plot. We would also create labels for each of the data in the graphic. We can do this using the names command within the vioplot() function as demonstrated below.
+
+```{r create violin-plot}
+# creates a violin plot for 4 variables, uses 3 shades of blue and add names to the plots
+vioplot(Census.Data$Unemployed, Census.Data$Qualification, Census.Data$White_British, Census.Data$Low_Occupancy, ylim=c(0,100), col = "dodgerblue", rectCol="dodgerblue3", colMed="dodgerblue4", names=c("Unemployed", "Qualifications", "White British", "Occupancy"))
+```
+
+Colours can be specified in various different forms such as predefined names (as demonstrated above) or using RGB or HEX colour codes. This PDF outlines the names of many colours in R and may be useful for you: http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf.
+
+For more information on graphical parameters please see: http://www.statmethods.net/advgraphs/parameters.html
+
+
+## Bivariate Plots
+These are the basic techniques used to create two-dimensional plots in R. A bivariate plot graphs the relationship between two variables that have been measured on a single sample of subjects. Such a plot permits you to see at a glance the degree and pattern of relation between the two variables.
+
+Bivariate analyses are conducted to determine whether a statistical association exists between two variables, the degree of association if one does exist, and whether one variable may be predicted from another.
+
+The scatter diagram or scatter plot is the workhorse bivariate plot, and is probably the plot type that is most frequently generated in practice (which is why it is the default plot method in R).
+
+### Using Simple Scatter Plot
+`Plot()` function is used for the most basic scatter plots in R, which only requires the identification of two variables within the function’s parameters. To plot the unemployed and qualification.
+
+We will also include the axis label, by adding xlab and ylab after the two variables.
+
+Also, one of the parameters for the `plot()` function is plotting symbols (pch). Details of what symbols are available can be found on the following webpage: http://www.statmethods.net/advgraphs/parameters.html.
+For instance, to change the default of hollow circles to filled circles, we can just add pch = 19 to the end of the function (remember to insert a comma after the previous command). The output of this is demonstrated below. Try changing the plots to triangles with your data.
+
+```{r simple-scatter-plot}
+#left of the comma is the x-axis, right is the y-axis. We are using the $ command to select the columns of the data frame we want and the xlab and ylab to label the axis.
+
+plot(Census.Data$Unemployed,Census.Data$Qualification, xlab="% unemployed", ylab="% with qualification", pch = 20)
+```
+
+From the chart above, it is possible to infer that there is a distinctive negative relationship between the percentage of those with level 4 qualifications and above and the percentage of those unemployed at the output area level. As level 4 qualifications refer to certificates of higher education we could expect there to be an inverse relationship between this variable and local unemployment rates.
+
+### Using Symbol Plot
+We also have the possibility of creating a proportional symbols plot using the symbols() function which shares much of the parameters as the plots() function. This allows us to consider a third dimension __(aka a third variable)__ in our two-dimensional plot.
+
+In this example, we will set the percentage of White British persons as the size dependent variable.
+
+What to do to set this up:
+
+* Now using the symbols() function we will set the symbols as circles and use the percentage of White British persons to define the proportional sizes of them in the chart. We have also defined the foreground(fg) and background(bg) colours of the symbols. The inches command allows you to restrict the overall size of all the symbols.
+
+* We will also be adding our xlab and ylab as shown in the scatter plot to label our axis.
+
+* We will also make this more interesting by inserting a regression line. This requires one to run a quick linear regression model which can be used to plot a straight line of best fit in the chart. This can be done in R by adding `(+) a linear model (lm())` function to our plot. The outputted regression line is then represented using the `‘abline()’` function. The regression model would be covered more later.
+
+* We can also edit the line using the line type (lty) and line width (lwd) commands from the abline() function. These are demonstrated below using an image from http://www.statmethods.net/advgraphs/parameters.html
+
+```{r symbol-plot}
+# Create a proportional symbols plot or a bubble plot with a dotted regression line
+symbols(Census.Data$Unemployed, Census.Data$Qualification,  circles = Census.Data$White_British, fg="white", bg ="purple", inches = 0.2,  xlab="% unemployed", ylab="% With a Qualification") +
+# adds a regression line, sets the colour to red, line width set to 2, and line type set to 3
+abline(lm(Census.Data$Qualification~ Census.Data$Unemployed), col="red", lwd=2, lty=3)
+```
+
+In the graphic, larger circles represent areas of greater percentages of the White British population. We can see that we have a higher percentage of white british people who have higher qualification to be employed and vice versa.
+
+### Using the ggplot2 package
+We can also create plots using the ggplot2 package.This function would need to be installed and loaded, since it is not available by default. It is a general scheme for data visualisation that breaks up graphs into semantic components such as scales and layers. ggplot2 can serve as a replacement for the base graphics in R and contains a number of default options that match good visualisation practice.
+
+```{r install ggplot2}
+# Loads an installed package
+library("ggplot2")
+```
+
+Now that we have the ggplot2 loaded, we will try to view what it looks like in creating a simple scatter plot using `ggplot()` function. It should be noticed that here we assign the data object, then in the aes() command we set the two variables. The points are also inputted as a separate function to the ggplot() function.
+
+```{r simple ggplot2 scatterplot}
+p <- ggplot(Census.Data, aes(Unemployed,Qualification))
+p + geom_point()+
+    geom_smooth(method = lm, se = FALSE)
+```
+
+We can also set various parameters for the points such as size and colour. For example in the code below the colours are proportional to the percentage of the White British population, whilst the size is proportional to the percentage of homes with a low occupation rating (i.e. overcrowded). Here it is possible to observe four different variables in one two-dimensional chart. 
+
+We will also be adding our regression line using the `geom_smooth` function. If you are using the same x and y values that you supplied in the `ggplot()` call and need to plot the linear regression line then you don't need to use the formula inside geom_smooth() `(e.g.putting formula= y~x after method='lm' separated with a comma)`, just supply the method="lm" instead.
+
+```{r ggplot2 with 4 variables size and color}
+ggplot(Census.Data, aes(Unemployed,Qualification)) +
+geom_point(aes(colour = White_British, size = Low_Occupancy)) +
+geom_smooth(method='lm')
+```
+
+## Finding Relationships
+
+This would help introduce me to some of the most commonly used means of statistically identifying and measuring bivariate and multivariate relationships in R. In this case, we would be trying out the Pearson’s correlation test, Spearman’s correlation test and a linear regression model on our data. We would still be using thesame work directory for this.
+
+### Bivariate Correlations
+This is one common means of identifying and measuring the relationship between two variables, otherwise known as correlation. In R this can simply be done by using the `cor()` function and inputting two variables within the parameters. The following example runs a correlation between our unemployed and qualification variables.
+
+```{r correlation}
+# Runs a Pearson's correlation
+cor(Census.Data$Unemployed, Census.Data$Qualification)
+```
+
+Above returns a Pearson’s correlation coefficient(r). A Pearson’s (or Product Moment Correlation) coefficient is a measure of linear association between two variables. Greater values represent a stronger relationship between the pair. __1 represents a perfect positive relationship, 0 represents no linear correlation and -1 represents a perfect negative relationship.__
+
+R gives a better option by using `cor.test()`, as this also reports significance statistics. If a test is not statistically significant, its results cannot be regarded as reliable. Here is an example below.
+
+```{r pearson cor}
+# Runs a Pearson's correlation
+cor.test(Census.Data$Unemployed, Census.Data$Qualification)
+```
+
+The final value is the Pearson’s correlation coefficient. A score of -0.62 identifies that there is a negative relationship between the unemployment and qualification variables. From the model, we also get the 95% confidence intervals. Confidence intervals display the range of values of which there is a defined probability that the coefficient falls within. The output also returns the result of the t-test. We can use this to determine if the results were statistically significant.
+
+A Pearson’s correlation is only suitable when the relationship between the two variables is linear. It is not sensitive to relationships that are non-linear. In these circumstances, it is worth using Spearman’s rank correlation. This statistic is obtained by simply replacing the observations by their rank within their sample and computing the correlation, which means it is also suitable for large-scale ordinal variables.
+
+```{r spearman correlation}
+# Runs a Spearman's correlation
+cor.test(Census.Data$Unemployed, Census.Data$Qualification, method="spearman")
+```
+
+Our conclusion did not change or the difference between spearman and pearson result is not so significant about the relationship between these two variables.
+
+Another good thing is that we can also produce a correlation pair-wise matrix in R. This will display a correlation coefficient for every possible pairing of variables in the data. To do this we need to first format the data to get rid of the ID column as it will not work in a correlation. We only want to include the variables for our correlation matrix. This way, we create another data table with our 4 variables (from column 2 to 5) and name it cormatrix_data
+
+```{r cormatrixdata}
+# creates a cormatrix_data object which does not include the 1st column from the original data 
+cormatrix_data <- Census.Data[,2:5]
+```
+
+Now that we have our new cormatrix_data object, we can create a new matrix by using the `cor()` function still. However, this time, instead of putting in the specific variables we want to check the correlation, we will but the whole data object we just created inside the bracket as shown below.
+
+We need to take note that coefficients of 1 will always be produced between identical variables as they display the same patterns.
+
+```{r cormatrix}
+# creates correlation matrix
+cor(cormatrix_data)
+```
+
+To have a better view of our correlation matrix, we will round up the result into 2 decimal places, using the function `round()`. We will also create a new data object from our correlation matrix result which would be used in further analysis. We will name it __corr__.
+
+```{r roundcormatrixcorr}
+# creates a rounded correlation matrix and name it corr
+corr <- round(cor(cormatrix_data),2)
+corr
+```
+
+Looking good! Now that we have this, let's go further to use the `qplot()` function from the ggplot2 package to create a heat map of this correlation matrix. We will however need to load another library called reshape2 while doing this. No need to reload the ggplot2, since we have done this earlier. We will go ahead with our heat map too as shown below.
+
+```{r corr_heatmap}
+#loads a new library reshape2 for our heatmap
+library(reshape2)
+
+# creates a qplot from our corr matrix
+qplot(x=Var1, y=Var2, data=melt(corr), fill=value, geom="tile") +
+   scale_fill_gradient2(limits=c(-1, 1))
+```
+
+Heat maps like this can be a simple and effective means of conveying lots of information in one graphic. In this case, the correlation matrix is already quite small so obscuring the numerical values with colours is not necessary. But if you have very large matrices of say 50+ cells this could be a useful technique, since it allows you to know the most and least correlated in a whole data set at a go.
+
+There is also a bespoke `corrplot` package which enables us to make correlation plots very easily. We can always look at more documentation to explore the function later using `?corrplot`. An example of the result from this function is shown below, using our `corr` data. We will also need to load the library `corrplot` to do this.
+
+```{r installs corrplot}
+#installs and loads the library corrplot
+library(corrplot)
+```
+
+```{r create corrplot}
+# creates a lower triangular corrplot from our corr matrix
+# few methods we can use are method = c("circle", "square", "ellipse", "number", "shade", "color", "pie")
+corrplot(corr, type="lower", tl.col="black", tl.srt=45, method = c("number"))
+```
+
+### Regression Analysis
+Curbed below from my reading in the [Statistical Analysis Handbook](http://www.statsref.com/HTML/?regression.html)
+
+Regression analysis is the term used to describe a family of methods that seek to model the relationship between one (or more) dependent or response variables and a number of independent or predictor variables. A simple linear regression plots a single straight line of predicted values as the model for a relationship. It is a simplification of the real world and its processes, that assumes that there is approximately a linear relationship between x and y.
+
+If there are two variables, x and y say, and one is regarded as the dependent variable, y, and the other as the independent variable, x, they may be totally independent, or they may show some degree of dependency, i.e. as x increases so y either increases or decreases in a systematic manner. If a scatter diagram or scatterplot of sample pairs (x,y) is produced it may be possible to discern the general form of a systematic relationship. If there is no pattern, but only what appears to be a random scattering of points, it is likely that there is no relationship detectable from this particular dataset and the variables may well be regarded as being independent. If on the other hand a very distinct pattern is observed, perhaps a simple linear relationship with y increasing in a linear manner as x increases, then a simple linear model may well be appropriate. Where the relationship is linear and positive, a best fit straight line through the scattering of (x,y) pairs will have a positive slope, b, and unless this line goes through the origin (0,0) it will cross the y-axis at some value y=a, known as the intercept.
+
+Another way of thinking about this line is as the best possible summary of the cloud of points that are represented in the scatterplot (if we can assume that a straight line would do a good job doing this). If I were to tell you to draw a straight line that best represents this pattern of points the regression line would be the one that best does it (if certain assumptions are met). The linear model then is a model that takes the form of the equation of a straight line through the data. The line does not go through all the points.
+
+In order to draw a regression line we need to know two things:
+
+1. We need to know where the line begins - the value of y (our dependent variable) when x (our independent variable) is 0 - so that we have a point from which to start drawing the line. The technical name for this point is the intercept or the constant. __We can think of independent and dependent variables in terms of cause and effect: an independent variable is the variable we think is the cause, while a dependent variable is the effect. In a nutshell, a Dependent variable is what happens as a result of the independent variable.__ The independent variable belongs on the x-axis (horizontal line) of the graph and the dependent variable belongs on the y-axis (vertical line).
+
+2. And we need to know what is the slope of that line.
+
+If we recall from school algebra (and you may not), the equation for any straight line is: `y = mx + b`. In statistics, we use a slightly different notation, although the equation remains the same: `y = b0 + b1x`.
+
+We need the origin of the line (b0) and the slope of the line (b1). How does R get the intercept and the slope of the regression line? How does R know where to draw this line? We need to estimate these parameters (or coefficients) from the data. For linear regression models (like the one we cover here) R tries to minimise the distance from every point in the scatterplot to the regression line using a method called __least squares estimation__.
+
+In order to fit the model we use the lm() function using the formula specification (y ~ x). __Typically we would want to store our regression model in a “variable”__, let’s call it model_1:
+
+```{r regression_model1}
+# runs a regressions model (y ~ x, data frame)
+# The summary() function helps us to simply see the basic results from running the model.
+model_1 <- lm(Qualification~ Unemployed, Census.Data)
+summary(model_1)
+```
+
+Let's plot this and add the regression line from the model to a scatter plot by using the `abline()` function (as we did previously). Notice that the model orders the x and y the other way round.
+
+```{r regressionline_model1}
+plot(Census.Data$Unemployed, Census.Data$Qualification, xlab="% Unemployed", ylab="% With a Qualification") + abline (model_1)
+```
+
+For now, we will just focus on the numbers in the “Estimate” column. The value of 69.774 estimated for the intercept is the “predicted” value for y when x equals zero - it is possible to interpret this from observing the scatter plot we just made. __This is the predicted value of the percentage of people with degrees when the percentage of people who are unemployed is zero.__
+
+We then need the b1 regression coefficient for our independent variable (Unemployed), the value that will shape the slope in this scenario. This value is -4.0672. This estimated regression coefficient for our independent variable has a convenient interpretation. When the value is positive, it tells us that for every one unit increase in X there is a b1 increase on y. If the coefficient is negative then it represents a decrease on y. Here, we can read it as __“for every one unit increase in the percentage of people who are unemployed, there is a -4.0672 unit decrease in the percentage of people with a degree.”__
+
+Knowing these two parameters not only allows us to draw the line, we can also solve y for any given value of x. If the percentage of people who are unemployed in a given area is 10%, we can simply go back to our regression line equation and insert the estimated parameters:
+
+- __y = b0 + b1x or y = 69.78 + (-4.0672 x 10)__
+
+Of course this model is simplification of reality and only considers the influence of one variable. Also, we do not need to do the calculation ourselves manually, since we can just use the `predict()` function to do this.
+
+```{r model1_predict}
+predict(model_1,data.frame(Unemployed= 10), interval = "confidence")
+```
+
+#### R Squared
+In the output above we saw there was something called the residuals. __The residuals are the differences between the observed values of y for each case minus the predicted or expected value of y, in other words, the distances between each point in the dataset and the regression line__. Least square estimation essentially aims to reduce the squared average of all these distances: that’s how it draws the line.
+
+We have residuals because our line is not a perfect representation of the cloud of points. You cannot predict perfectly what the value of y is for every area just by looking ONLY at the value of x. There are other things that may influence the values of y which are not being taken into account by our model. There are other things that surely matter in terms of understanding of the relationship between health and levels of education. And then, of course, we have measurement error and other forms of noise.
+
+__We can re-write our equation like this if we want to represent each value of y (rather than the predicted value of y) then: y = b0 + b1x + error__
+
+The residuals capture how much variation is unexplained, how much we still have to learn if we want to understand variation in y. __A good model tries to maximize explained variation and reduce the magnitude of the residuals__. We can use information from the residuals to produce a measure of effect size, of how good our model is in predicting variation in our dependent variables. If we did not have any information about x our best bet for y would be the mean of y. The regression line aims to improve that prediction. By knowing the values of x we can build a regression line that aims to get us closer to the actual values of y
+
+The distance between the mean (our best guess without any other piece of information) and the observed value of y is what we call the total variation. The residual is the difference between our predicted value of y and the observed value of y. This is what we cannot explain (i.e, variation in y that is unexplained). The difference between the mean value of y and the expected value of y (the value given by our regression line) is how much better we are doing with our prediction by using information about x. How much closer the regression line gets us to the observed values. We can then contrast these two different sources of variation (explained and unexplained) to produce a single measure of how good our model is.
+
+Let's take a look at the summary of our model again.
+
+```{r summary_model1}
+summary(model_1)
+```
+
+The multiple R-squared takes the ratio of the explained variation (the squared differences between the regression line and the mean of Y for each observation) by the total variation (the squared differences of the observed values of Y for each observation from the mean of Y). This gives us a measure of the percentage of variation in Y that is “explained” by X.
+
+__We can take this value as a measure of the strength of our model__. If we look at the R output we will see that the R-squared for our model was 0.3899. We can say that our model explains about 40% of the variance in the percentage of people with a qualification in our study area.
+
+Knowing how to interpret this is important. __R-squared ranges from 0 to 1; The greater it is, the more powerful our model is, the more explaining we are doing, and the better we are able to account for variation in our outcome Y with our input__. In other words, the stronger the relationship is between Y and X. As with all the other measures of effect size, interpretation is a matter of judgement. It is best to see what other researchers report in relation to the particular outcome that we may be exploring. We can use the R-squared to compare against other models we might fit to see which is most powerful.
+
+#### Inference with Regression
+
+In real world applications, we have access to a set of observations from which we can compute the least squares line, but the population regression line is unobserved. So our regression line is one of many that could be estimated. A different set of Output Areas would produce a different regression line. If we estimate b0 and b1 from a particular sample, then our estimates won’t be exactly equal to b0 and b1 in the population. __But if we could average the estimates obtained over a very large number of data sets, the average of these estimates would equal the coefficients of the regression line in the population.__
+
+In the same way that we can compute the standard error when estimating the mean, we can compute standard errors for the regression coefficients to quantify our uncertainty about these estimates. These standard errors can, in turn, be used to produce confidence intervals. This would require us to assume that the residuals are normally distributed. For a simple regression model, we are assuming that the values of y are approximately normally distributed for each level of x:
+
+We can also then perform a standard hypothesis test on the coefficients. As we saw before when summarizing the model, R will compute the standard errors and a t-test for each of the coefficients.
+
+In our `model1` summary above, we can see that the coefficient for our predictor is statistically significant, as represented by the __p-value__. Notice that the t-statistics and p-value are the same as the correlation coefficient.
+
+__Estimated Coefficient Confidence Interval__
+
+We can also obtain confidence intervals for the estimated coefficients using the `confint()` function. The below example will produce a 95% confidence interval for the model. The 95% confidence interval defines a range of values that we can be 95% certain contains the mean slope of the regression line.
+
+```{r model1-confint}
+confint(model_1, level= 0.95)
+```
+#### Multiple Regression
+So we have seen our models with just one predictor or explanatory variable. We can build ‘better’ models by increasing the number of predictors. In our case, we can also add another variable into the model for predicting the number of people with degree level qualifications. We have seen from the plots above that there are clearly fewer people living in deprivation in areas where more people have a degree, so let’s see if it helps us make better predictions.
+
+Another reason why it is important to think about additional variables in our model is to control for spurious correlations (although here we may also want to use our common sense when selecting our variables!). __We have heard that correlation does not equal causation__. Just because two things are associated, we cannot assume that one is the cause for the other. Typically we see how the pilots switch the “secure the belt” sign on when there is turbulence during a flight. These two things are associated, they tend to come together. But the pilots are not causing the turbulence by pressing a switch! __The world is full of spurious correlations, associations between two variables that should not be taken too seriously.__
+
+It’s not an exaggeration to say that most quantitative explanatory research is about trying to control for the presence of confounders - variables that may explain away observed associations. We could think about any social science question: Are married people less prone to depression? Or is it that people that get married are different from those that don’t (and are there pre-existing differences that are associated with less depression)? Are ethnic minorities more likely to vote for centre-left political parties? Or, is it that there are other factors (e.g. socioeconomic status, area of residence, sector of employment) that, once controlled, would mean there is no ethnic group difference in voting?
+
+Multiple regression is one way of checking the relevance of competing explanations. We could, for example, set up a model where we try to predict voting behaviour with an indicator of ethnicity and an indicator of structural disadvantage. If after controlling for structural disadvantage, we see that the regression coefficient for ethnicity is still significant, we may be onto something, particularly if the estimated effect is still large. If, on the other hand, the t-test for the regression coefficient of our ethnicity variable is no longer significant, then we may be tempted to think that structural disadvantage is a confounder for vote selection.
+
+It could not be any easier to fit a multiple regression model. We simply modify the formula in the `lm()` function by adding terms for the additional inputs. Here the 2nd predictor (or independent) variable is the % of the white British population.
+
+```{r model2-multipleregression}
+# a multiple regression model
+model_2 <- lm(Qualification ~ Unemployed + White_British + Low_Occupancy, Census.Data)
+summary(model_2)
+```
+
+Here, we can read it as 
+
+- __“for every one unit increase in the percentage of people who are unemployed, there is a -1.68488 unit decrease in the percentage of people with a degree.”__
+- __“for every one unit increase in the percentage of people who are white british, there is a 0.11748 unit increase in the percentage of people with a degree.”__
+- __“for every one unit increase in the percentage of people with low occupancy, there is a -1.22017 unit decrease in the percentage of people with a degree.”__
+
+P-value shows that each of these are statistically significant.
+
+Now we can consider the influence of multiple variables. Also, we will notice that the R-squared value has improved slightly compared to the first model. We can try testing various different combinations of variables to know which model is most efficient at representing the distribution of our qualifications variable across the study area.
+
+## Making Maps in R
+In this section, we will be handling and mapping spatial polygon data in R, with a focus on the  the functionality of the `tmap` package due to its relative simplicity, even though there are other awesome packages that can be used.
+
+We will first install the packages we will be using for each section in the console window, using `install.packages()` function and then we load them as shown below.
+
+```{r load-gis-packages}
+library("rgdal")
+library("rgeos")
+```
+
+### Loading Our Shapefiles
+Shapefiles are made up of multiple different files which, when combined by certain software packages, can be mapped using a common projection system. We will be using output area boundaries as our data is at that level. Therefore, the data will be visualised as a polygon file whereby each individual polygon represents the outline of a unique output area from our study area. In this example, our spatial data files can be found in the shapefiles folder of our data pack. Together they comprise:
+
++ Camden_oa11.dbf
++ Camden_oa11.prj
++ Camden_oa11.shp
++ Camden_oa11.shx
+
+```{r load shapefiles}
+# Load the output area shapefiles
+Output.Areas<- readOGR("data/Camden/shapefiles", "Camden_oa11")
+```
+
+The inputted shapefile should contain an identical number of features as the number of observations in our Census.Data file being used for the overall project. We can explore the shapefile. First, we will plot it as a map to view the spatial dimensions of the shapefile by entering the object name we created when loading the shapefile `Output.Areas` into the standard `plot()` function.
+
+```{r plot shapefile}
+# plots the shapefile
+plot(Output.Areas)
+```
+
+### Joining our data with the shapefile
+Now that we have our shapefile, we now need to join our Census.Data to the shapefile so the census attributes can be mapped. As our census data contains the unique names of each of the output areas, this can be used a key to merge the data to our output area file (which also contains unique names of each output area). We will use the merge() function to join the data.
+
+Notice that this time the column headers for our output area names are not identical, despite the fact they contain the same data. We, therefore, have to use `by.x` and `by.y` so the merge function uses the correct columns to join the data. We will name our new object from the merging as `OA.Census`.
+
+```{r join-data-to-shapefile}
+# joins data to the shapefile
+OA.Census <- merge(Output.Areas, Census.Data, by.x="OA11CD", by.y="OA")
+```
+
+### Setting a coordinate system
+It is also important to set a coordinate system, especially if you want to map multiple different files. The `proj4string()` and `CRS()` functions allows us to set the coordinate system of a shapefile to a predefined system of our choice. Most data from the UK is projected using the British National Grid (EPSG:27700) produced by the Ordinance Survey, this includes the standard statistical geography produced by the Office for National Statistics.
+
+__In this case, the shapefile we originally downloaded from the CDRC Data website already has the correct projection system so we don’t need to run this step for our `OA.Census` object. However, it is worth taking note of this step for future reference.__
+
+```{r set-coordinate-system}
+# sets the coordinate system to the British National Grid
+proj4string(OA.Census) <- CRS("+init=EPSG:27700")
+```
+
+### Mapping our Data
+While the plot function is pretty limited in its basic form. Several packages allow us to map data relatively easily. They also provide a number of functions to allow us to tailor and alter the graphic. `ggplot2`, for example, allows you to map spatial data. However, probably the easiest to use are the functions within the `tmap` library.
+
+We have pre-installed our packages earlier in the console terminal, using the `install.packages()` function. We will go ahead to load the package for mapping our data as shown below
+
+```{r load-packages-for-data-mapping}
+# loads packages
+library(tmap)
+library(leaflet)
+```
+
+#### Creating a quick map
+Now that we have our packages loaded, we will try to create a quick map, using qualification variable in our census data. Remember, we have merged this into another object named OA.Census.
+
+For us to just to create a map with a legend quickly, we can use the `qtm()` function.
+
+```{r produce-quick-map-qualification}
+# this will produce a quick map of our qualification variable
+qtm(OA.Census, fill = "Qualification")
+```
+
+
+
